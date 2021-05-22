@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "serve": "DEBUG=Server nodemon server.js",
+    "serve-win": "set DEBUG=Server && nodemon server.js",
     "build": "docker build --tag pivpn-web ."
   },
   "author": "Emile Nijssen",

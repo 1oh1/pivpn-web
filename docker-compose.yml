@@ -1,10 +1,10 @@
 version: "3.3"
 services:
   pivpn-web:
-    image: weejewel/pivpn-web
+    image: iamvinku/pivpn-web
     container_name: pivpn-web
     ports:
-      - "51821:51821"
+      - "443:443"
     restart: unless-stopped
     environment:
       # Uncomment this to connect to a remote PiVPN host
