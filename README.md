@@ -54,7 +54,7 @@ curl -L https://install.pivpn.io | bash
 Run this command once to automatically start the service on boot.
 
 ```bash
-docker run -d -p 51821:51821 --name pivpn-web --restart=unless-stopped weejewel/pivpn-web
+docker run -d -p 443:443 --name pivpn-web --restart=unless-stopped iamvinku/pivpn-web
 ```
 
 > 💡 Remove the `restart=always` flag to prevent auto-start on boot.
@@ -65,7 +65,7 @@ docker run -d -p 51821:51821 --name pivpn-web --restart=unless-stopped weejewel/
 
 ## Usage
 
-Open `http://<ip-of-your-pi>:51821` and log in with your Raspberry Pi username & password.
+Open `https://<ip-of-your-pi>` and log in with your Raspberry Pi username & password.
 
 > 💡 The default Raspbian username is `pi` and the default password is `raspberry`.
 
@@ -78,6 +78,47 @@ Run these commands to update to the latest version.
 ```bash
 docker stop pivpn-web
 docker rm pivpn-web
-docker pull weejewel/pivpn-web
-docker run -d -p 51821:51821 --name pivpn-web --restart=unless-stopped weejewel/pivpn-web
+docker pull iamvinku/pivpn-web
+sudo docker run -d -p 443:443 --name pivpn-web --restart=unless-stopped iamvinku/pivpn-web
 ```
+
+## Notes on running PiVPN Web on Oracle Cloud Infrastructure
+
+* If running on Ubuntu compute instances, make sure to attach a network security group allowing **Ingress** traffic from all source ports to destination **TCP** port **443** from source CIDR **0.0.0.0/0**. If you are only going to access the server from a static IP or a different range of IPs, allow traffic from that CIDR block instead of **0.0.0.0/0**.
+
+* Run the following iptables command as well:
+
+```bash
+# To access PiVPN Web over HTTPS
+sudo iptables -I INPUT 1 -i ens3 -p tcp -m tcp --dport 443 -m comment --comment PiVPN-Web-input-rule -j ACCEPT
+
+# To complete the LetsEncrypt challenge (not required if you already have the certificate)
+sudo iptables -I INPUT 1 -i ens3 -p tcp -m tcp --dport 80 -m comment --comment letsencrypt-input-rule -j ACCEPT
+```
+
+* To ensure the [iptables rules are saved](https://www.cyberciti.biz/faq/how-to-save-iptables-firewall-rules-permanently-on-linux/):
+```
+sudo iptables-save | sudo tee /etc/iptables/rules.v4
+sudo service iptables restart
+sudo iptables -S
+```
+
+* Mount the **LetsEncrypt** certificate files into the Docker container with:
+
+```bash
+sudo docker run -d -p 443:443 -v /etc/letsencrypt/live/yourdomain.com/fullchain.pem:/app/sslcerts/server.crt -v /etc/letsencrypt/live/yourdomain.com/privkey.pem:/app/sslcerts/server.key --name pivpn-web --restart=unless-stopped iamvinku/pivpn-web
+```
+
+* Since PiVPN Web tries to SSH to the host using SSH credentials and OCI compute hosts by default are set up to use SSH keys for login, you may need to [edit `/etc/ssh/sshd_config` to permit `root` user login and enable password authentication](https://serverpilot.io/docs/how-to-enable-ssh-password-authentication/)
+
+```
+# /etc/ssh/sshd_config
+PasswordAuthentication yes
+PermitRootLogin yes
+```
+
+* Once these changes are made, set a long, secure, auto-generated password for the `root` user with `sudo passwd root` and restart the ssh service with `sudo service ssh restart`. Log in to PiVPN Web using the root user and password by visiting https://yourdomain.com
+
+* If you're using a dynamic DNS service (e.g. DuckDNS.org) visit the relevant subdomain URL (e.g. https://yoursubdomain.duckdns.org)
+
+* Since the server would be open to the public (i.e. ingress rule allowing 0.0.0.0/0 traffic to port 443) you might get a lot of unwanted attention (e.g. brute-forcing attempts) so you may want to restrict PiVPN Web and have it only listen for connections originating from within your internal network which would mean that you'll need to have a WireGuard tunnel to the server already set up to be able to access PiVPN Web dashboard.
